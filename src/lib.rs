@@ -7,7 +7,7 @@
 pub struct VirtualMachine {
     registers: [u16; 8],
     memory: [u16; 32768],
-    _stack: Vec<u16>,
+    stack: Vec<u16>,
 
     ip: usize, // instruction pointer
 }
@@ -17,7 +17,7 @@ impl Default for VirtualMachine {
         Self {
             registers: Default::default(),
             memory: [0; 32768],
-            _stack: Default::default(),
+            stack: Default::default(),
 
             ip: 0,
         }
@@ -55,10 +55,30 @@ impl VirtualMachine {
     fn step(&mut self) -> Result<(), ()> {
         match self.fetch() {
             Instruction::Halt => return Err(()),
-            Instruction::Noop => (),
-            Instruction::Out(op) => {
-                print!("{}", char::from(op.value(self) as u8));
+            Instruction::Push(op) => self.stack.push(self.value(op)),
+            Instruction::Pop(reg) => self.registers[reg] = self.stack.pop().unwrap(),
+            Instruction::Set(reg, value) => self.registers[reg] = self.value(value),
+            Instruction::Eq(reg, a, b) => {
+                self.registers[reg] = if self.value(a) == self.value(b) { 1 } else { 0 };
             }
+            Instruction::Jump(dest) => self.ip = usize::from(self.value(dest)),
+            Instruction::JumpTrue(cond, dest) => {
+                if self.value(cond) != 0 {
+                    self.ip = usize::from(self.value(dest));
+                }
+            }
+            Instruction::JumpFalse(cond, dest) => {
+                if self.value(cond) == 0 {
+                    self.ip = usize::from(self.value(dest));
+                }
+            }
+            Instruction::Add(reg, lhs, rhs) => {
+                self.registers[reg] = (self.value(lhs) + self.value(rhs)) % 32768
+            }
+            Instruction::Out(op) => {
+                print!("{}", char::from(self.value(op) as u8));
+            }
+            Instruction::Noop => (),
         };
 
         Ok(())
@@ -72,9 +92,34 @@ impl VirtualMachine {
 
         match opcode {
             0 => Instruction::Halt,
+            1 => Instruction::Set(self.fetch_register(), self.fetch_operand()),
+            2 => Instruction::Push(self.fetch_operand()),
+            3 => Instruction::Pop(self.fetch_register()),
+            4 => Instruction::Eq(
+                self.fetch_register(),
+                self.fetch_operand(),
+                self.fetch_operand(),
+            ),
+            6 => Instruction::Jump(self.fetch_operand()),
+            7 => Instruction::JumpTrue(self.fetch_operand(), self.fetch_operand()),
+            8 => Instruction::JumpFalse(self.fetch_operand(), self.fetch_operand()),
+            9 => Instruction::Add(
+                self.fetch_register(),
+                self.fetch_operand(),
+                self.fetch_operand(),
+            ),
             19 => Instruction::Out(self.fetch_operand()),
             21 => Instruction::Noop,
             _ => todo!("unimplemented opcode: {}", opcode),
+        }
+    }
+
+    /// Fetches the next word from memory, advancing the instruction pointer,
+    /// and interprets it as a register index.
+    fn fetch_register(&mut self) -> usize {
+        match self.fetch_operand() {
+            Operand::Reg(reg) => reg,
+            _ => panic!("literal used as destination of set opcode"),
         }
     }
 
@@ -89,6 +134,15 @@ impl VirtualMachine {
             Operand::Reg(usize::from(operand - 32768))
         }
     }
+
+    /// Unwraps the value contained in this operand, either by returning a literal
+    /// or accessing the contents of the specified register.
+    fn value(&self, op: Operand) -> u16 {
+        match op {
+            Operand::Lit(val) => val,
+            Operand::Reg(reg) => self.registers[reg],
+        }
+    }
 }
 
 /// A valid decoded instruction, including its operands.
@@ -96,10 +150,26 @@ impl VirtualMachine {
 pub enum Instruction {
     /// Stops execution and terminates the program.
     Halt,
-    /// Does nothing.
-    Noop,
+    /// Pushes a word onto the stack.
+    Push(Operand),
+    /// Removes the top element from the stack and writes it into the destination register.
+    Pop(usize),
+    /// Sets a register to the operand's value.
+    Set(usize, Operand),
+    /// Sets a register to 1 if the operands are equal, 0 otherwise.
+    Eq(usize, Operand, Operand),
+    /// Jumps to the specified address in memory.
+    Jump(Operand),
+    /// Jumps to the destination if the condition is non-zero.
+    JumpTrue(Operand, Operand),
+    /// Jumps to the destination if the condition is zero.
+    JumpFalse(Operand, Operand),
+    /// Adds two operands and stores the result in the destination register.
+    Add(usize, Operand, Operand),
     /// Write the character represented by the ASCII code in the operand to stdout.
     Out(Operand),
+    /// Does nothing.
+    Noop,
 }
 
 /// Legal operand types for an instruction.
@@ -109,15 +179,4 @@ pub enum Operand {
     Lit(u16),
     /// Register index (0 to 7)
     Reg(usize),
-}
-
-impl Operand {
-    /// Unwraps the value contained in this operand, either by returning a literal
-    /// or accessing the contents of the specified register.
-    pub fn value(&self, vm: &VirtualMachine) -> u16 {
-        match *self {
-            Operand::Lit(val) => val,
-            Operand::Reg(reg) => vm.registers[reg],
-        }
-    }
 }
