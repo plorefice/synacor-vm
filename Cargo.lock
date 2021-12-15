@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "synacor-vm"
+name = "synacor"
 version = "0.1.0"
