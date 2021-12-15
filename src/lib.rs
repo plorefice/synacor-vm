@@ -55,16 +55,24 @@ impl VirtualMachine {
     fn step(&mut self) -> Result<(), ()> {
         match self.fetch() {
             Instruction::Halt => return Err(()),
-            Instruction::Push(op) => self.stack.push(self.value(op)),
-            Instruction::Pop(reg) => self.registers[reg] = self.stack.pop().unwrap(),
-            Instruction::Set(reg, value) => self.registers[reg] = self.value(value),
+            Instruction::Push(op) => {
+                self.stack.push(self.value(op));
+            }
+            Instruction::Pop(reg) => {
+                self.registers[reg] = self.stack.pop().unwrap();
+            }
+            Instruction::Set(reg, value) => {
+                self.registers[reg] = self.value(value);
+            }
             Instruction::Eq(reg, a, b) => {
                 self.registers[reg] = if self.value(a) == self.value(b) { 1 } else { 0 };
             }
             Instruction::GreaterThan(reg, a, b) => {
                 self.registers[reg] = if self.value(a) > self.value(b) { 1 } else { 0 };
             }
-            Instruction::Jump(dest) => self.ip = usize::from(self.value(dest)),
+            Instruction::Jump(dest) => {
+                self.ip = usize::from(self.value(dest));
+            }
             Instruction::JumpTrue(cond, dest) => {
                 if self.value(cond) != 0 {
                     self.ip = usize::from(self.value(dest));
@@ -78,7 +86,9 @@ impl VirtualMachine {
             Instruction::Add(reg, a, b) => {
                 self.registers[reg] = (self.value(a) + self.value(b)) % 32768
             }
-            Instruction::And(reg, a, b) => self.registers[reg] = self.value(a) & self.value(b),
+            Instruction::And(reg, a, b) => {
+                self.registers[reg] = self.value(a) & self.value(b);
+            }
             Instruction::Out(op) => {
                 print!("{}", char::from(self.value(op) as u8));
             }
@@ -87,7 +97,48 @@ impl VirtualMachine {
 
         Ok(())
     }
+}
 
+/// Fetches an instruction with O signature.
+macro_rules! fetch_o {
+    ($vm:expr, $instr:ident) => {
+        Instruction::$instr($vm.fetch_operand())
+    };
+}
+
+/// Fetches an instruction with R signature.
+macro_rules! fetch_r {
+    ($vm:expr, $instr:ident) => {
+        Instruction::$instr($vm.fetch_register())
+    };
+}
+
+/// Fetches an instruction with OO signature.
+macro_rules! fetch_o2 {
+    ($vm:expr, $instr:ident) => {
+        Instruction::$instr($vm.fetch_operand(), $vm.fetch_operand())
+    };
+}
+
+/// Fetches an instruction with RO signature.
+macro_rules! fetch_ro {
+    ($vm:expr, $instr:ident) => {
+        Instruction::$instr($vm.fetch_register(), $vm.fetch_operand())
+    };
+}
+
+/// Fetches an instruction with ROO signature.
+macro_rules! fetch_ro2 {
+    ($vm:expr, $instr:ident) => {
+        Instruction::$instr(
+            $vm.fetch_register(),
+            $vm.fetch_operand(),
+            $vm.fetch_operand(),
+        )
+    };
+}
+
+impl VirtualMachine {
     /// Fetches the next instruction (opcode + all operands) from memory and advances
     /// the instruction pointer.
     fn fetch(&mut self) -> Instruction {
@@ -96,33 +147,17 @@ impl VirtualMachine {
 
         match opcode {
             0 => Instruction::Halt,
-            1 => Instruction::Set(self.fetch_register(), self.fetch_operand()),
-            2 => Instruction::Push(self.fetch_operand()),
-            3 => Instruction::Pop(self.fetch_register()),
-            4 => Instruction::Eq(
-                self.fetch_register(),
-                self.fetch_operand(),
-                self.fetch_operand(),
-            ),
-            5 => Instruction::GreaterThan(
-                self.fetch_register(),
-                self.fetch_operand(),
-                self.fetch_operand(),
-            ),
-            6 => Instruction::Jump(self.fetch_operand()),
-            7 => Instruction::JumpTrue(self.fetch_operand(), self.fetch_operand()),
-            8 => Instruction::JumpFalse(self.fetch_operand(), self.fetch_operand()),
-            9 => Instruction::Add(
-                self.fetch_register(),
-                self.fetch_operand(),
-                self.fetch_operand(),
-            ),
-            12 => Instruction::And(
-                self.fetch_register(),
-                self.fetch_operand(),
-                self.fetch_operand(),
-            ),
-            19 => Instruction::Out(self.fetch_operand()),
+            1 => fetch_ro!(self, Set),
+            2 => fetch_o!(self, Push),
+            3 => fetch_r!(self, Pop),
+            4 => fetch_ro2!(self, Eq),
+            5 => fetch_ro2!(self, GreaterThan),
+            6 => fetch_o!(self, Jump),
+            7 => fetch_o2!(self, JumpTrue),
+            8 => fetch_o2!(self, JumpFalse),
+            9 => fetch_ro2!(self, Add),
+            12 => fetch_ro2!(self, And),
+            19 => fetch_o!(self, Out),
             21 => Instruction::Noop,
             _ => todo!("unimplemented opcode: {}", opcode),
         }
