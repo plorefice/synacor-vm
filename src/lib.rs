@@ -61,6 +61,9 @@ impl VirtualMachine {
             Instruction::Eq(reg, a, b) => {
                 self.registers[reg] = if self.value(a) == self.value(b) { 1 } else { 0 };
             }
+            Instruction::GreaterThan(reg, a, b) => {
+                self.registers[reg] = if self.value(a) > self.value(b) { 1 } else { 0 };
+            }
             Instruction::Jump(dest) => self.ip = usize::from(self.value(dest)),
             Instruction::JumpTrue(cond, dest) => {
                 if self.value(cond) != 0 {
@@ -72,9 +75,10 @@ impl VirtualMachine {
                     self.ip = usize::from(self.value(dest));
                 }
             }
-            Instruction::Add(reg, lhs, rhs) => {
-                self.registers[reg] = (self.value(lhs) + self.value(rhs)) % 32768
+            Instruction::Add(reg, a, b) => {
+                self.registers[reg] = (self.value(a) + self.value(b)) % 32768
             }
+            Instruction::And(reg, a, b) => self.registers[reg] = self.value(a) & self.value(b),
             Instruction::Out(op) => {
                 print!("{}", char::from(self.value(op) as u8));
             }
@@ -100,10 +104,20 @@ impl VirtualMachine {
                 self.fetch_operand(),
                 self.fetch_operand(),
             ),
+            5 => Instruction::GreaterThan(
+                self.fetch_register(),
+                self.fetch_operand(),
+                self.fetch_operand(),
+            ),
             6 => Instruction::Jump(self.fetch_operand()),
             7 => Instruction::JumpTrue(self.fetch_operand(), self.fetch_operand()),
             8 => Instruction::JumpFalse(self.fetch_operand(), self.fetch_operand()),
             9 => Instruction::Add(
+                self.fetch_register(),
+                self.fetch_operand(),
+                self.fetch_operand(),
+            ),
+            12 => Instruction::And(
                 self.fetch_register(),
                 self.fetch_operand(),
                 self.fetch_operand(),
@@ -158,6 +172,8 @@ pub enum Instruction {
     Set(usize, Operand),
     /// Sets a register to 1 if the operands are equal, 0 otherwise.
     Eq(usize, Operand, Operand),
+    /// Sets a register to 1 if the 1st operand's value is greater than the 2nd one's, 0 otherwise.
+    GreaterThan(usize, Operand, Operand),
     /// Jumps to the specified address in memory.
     Jump(Operand),
     /// Jumps to the destination if the condition is non-zero.
@@ -166,6 +182,8 @@ pub enum Instruction {
     JumpFalse(Operand, Operand),
     /// Adds two operands and stores the result in the destination register.
     Add(usize, Operand, Operand),
+    /// Stores the result of the bitwise AND between the two operands in the destination register.
+    And(usize, Operand, Operand),
     /// Write the character represented by the ASCII code in the operand to stdout.
     Out(Operand),
     /// Does nothing.
