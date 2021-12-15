@@ -102,10 +102,20 @@ impl VirtualMachine {
             Instruction::Not(reg, a) => {
                 self.registers[reg] = (!self.value(a)) & 0x7fff;
             }
+            Instruction::Rmem(reg, a) => {
+                self.registers[reg] = self.memory[usize::from(self.value(a))];
+            }
+            Instruction::Wmem(dest, a) => {
+                self.memory[usize::from(self.value(dest))] = self.value(a);
+            }
             Instruction::Call(a) => {
                 self.stack.push(self.ip as u16);
                 self.ip = usize::from(self.value(a));
             }
+            Instruction::Ret => match self.stack.pop() {
+                Some(dest) => self.ip = usize::from(dest),
+                None => return Err(()),
+            },
             Instruction::Out(op) => {
                 print!("{}", char::from(self.value(op) as u8));
             }
@@ -178,7 +188,10 @@ impl VirtualMachine {
             12 => fetch_ro2!(self, And),
             13 => fetch_ro2!(self, Or),
             14 => fetch_ro!(self, Not),
+            15 => fetch_ro!(self, Rmem),
+            16 => fetch_o2!(self, Wmem),
             17 => fetch_o!(self, Call),
+            18 => Instruction::Ret,
             19 => fetch_o!(self, Out),
             21 => Instruction::Noop,
             _ => todo!("unimplemented opcode: {}", opcode),
@@ -249,8 +262,14 @@ pub enum Instruction {
     Or(usize, Operand, Operand),
     /// Stores the 15-bit bitwise inverse of the operand in the destination register.
     Not(usize, Operand),
+    /// Reads the content of the memory address in the operand into the destination register.
+    Rmem(usize, Operand),
+    /// Writes the value of the 2nd operand in the memory address at the 1st operand.
+    Wmem(Operand, Operand),
     /// Writes the address of the next instruction to the stack and jumpd to the operand.
     Call(Operand),
+    /// Removes the top element from the stack and jumps to it.
+    Ret,
     /// Writes the character represented by the ASCII code in the operand to stdout.
     Out(Operand),
     /// Does nothing.
