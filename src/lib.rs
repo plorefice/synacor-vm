@@ -86,8 +86,25 @@ impl VirtualMachine {
             Instruction::Add(reg, a, b) => {
                 self.registers[reg] = (self.value(a) + self.value(b)) % 32768
             }
+            Instruction::Mul(reg, a, b) => {
+                let res = u32::from(self.value(a)) * u32::from(self.value(b));
+                self.registers[reg] = (res % 32768) as u16;
+            }
+            Instruction::Mod(reg, a, b) => {
+                self.registers[reg] = self.value(a) % self.value(b);
+            }
             Instruction::And(reg, a, b) => {
                 self.registers[reg] = self.value(a) & self.value(b);
+            }
+            Instruction::Or(reg, a, b) => {
+                self.registers[reg] = self.value(a) | self.value(b);
+            }
+            Instruction::Not(reg, a) => {
+                self.registers[reg] = (!self.value(a)) & 0x7fff;
+            }
+            Instruction::Call(a) => {
+                self.stack.push(self.ip as u16);
+                self.ip = usize::from(self.value(a));
             }
             Instruction::Out(op) => {
                 print!("{}", char::from(self.value(op) as u8));
@@ -156,7 +173,12 @@ impl VirtualMachine {
             7 => fetch_o2!(self, JumpTrue),
             8 => fetch_o2!(self, JumpFalse),
             9 => fetch_ro2!(self, Add),
+            10 => fetch_ro2!(self, Mul),
+            11 => fetch_ro2!(self, Mod),
             12 => fetch_ro2!(self, And),
+            13 => fetch_ro2!(self, Or),
+            14 => fetch_ro!(self, Not),
+            17 => fetch_o!(self, Call),
             19 => fetch_o!(self, Out),
             21 => Instruction::Noop,
             _ => todo!("unimplemented opcode: {}", opcode),
@@ -217,9 +239,19 @@ pub enum Instruction {
     JumpFalse(Operand, Operand),
     /// Adds two operands and stores the result in the destination register.
     Add(usize, Operand, Operand),
+    /// Multiplies two operands and stores the result in the destination register.
+    Mul(usize, Operand, Operand),
+    /// Stores the remainder of the two operands in the destination register.
+    Mod(usize, Operand, Operand),
     /// Stores the result of the bitwise AND between the two operands in the destination register.
     And(usize, Operand, Operand),
-    /// Write the character represented by the ASCII code in the operand to stdout.
+    /// Stores the result of the bitwise OR between the two operands in the destination register.
+    Or(usize, Operand, Operand),
+    /// Stores the 15-bit bitwise inverse of the operand in the destination register.
+    Not(usize, Operand),
+    /// Writes the address of the next instruction to the stack and jumpd to the operand.
+    Call(Operand),
+    /// Writes the character represented by the ASCII code in the operand to stdout.
     Out(Operand),
     /// Does nothing.
     Noop,
