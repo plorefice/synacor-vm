@@ -4,15 +4,17 @@
 
 use std::io::{self, BufReader, Read, Stdin};
 
+use serde::{Deserialize, Serialize};
+
 /// A virtual machine which is able to load and execute programs built for this architecture.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VirtualMachine {
     registers: [u16; 8],
-    memory: [u16; 32768],
+    memory: Vec<u16>,
     stack: Vec<u16>,
-
     ip: usize, // instruction pointer
 
+    #[serde(skip, default = "VirtualMachine::open_stdin")]
     stdin: BufReader<Stdin>,
 }
 
@@ -20,11 +22,11 @@ impl Default for VirtualMachine {
     fn default() -> Self {
         Self {
             registers: Default::default(),
-            memory: [0; 32768],
+            memory: Default::default(),
             stack: Default::default(),
-
             ip: 0,
-            stdin: BufReader::new(io::stdin()),
+
+            stdin: Self::open_stdin(),
         }
     }
 }
@@ -111,7 +113,8 @@ impl VirtualMachine {
                 self.registers[reg] = self.memory[usize::from(self.value(a))];
             }
             Instruction::Wmem(dest, a) => {
-                self.memory[usize::from(self.value(dest))] = self.value(a);
+                let addr = usize::from(self.value(dest));
+                self.memory[addr] = self.value(a);
             }
             Instruction::Call(a) => {
                 self.stack.push(self.ip as u16);
@@ -140,6 +143,10 @@ impl VirtualMachine {
         };
 
         Ok(())
+    }
+
+    fn open_stdin() -> BufReader<Stdin> {
+        BufReader::new(io::stdin())
     }
 }
 

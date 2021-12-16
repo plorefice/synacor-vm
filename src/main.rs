@@ -8,7 +8,7 @@ use synacor::VirtualMachine;
 struct Cli {
     /// Loads a save state and resumes execution
     #[structopt(short, long, parse(from_os_str))]
-    load_state: Option<PathBuf>,
+    _load_state: Option<PathBuf>,
 
     /// Binary file containing the program to run
     #[structopt(parse(from_os_str))]
