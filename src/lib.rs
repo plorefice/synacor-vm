@@ -2,14 +2,18 @@
 //! [Synacor Challenge](https://challenge.synacor.com/).
 #![warn(missing_docs)]
 
+use std::io::{self, BufReader, Read, Stdin};
+
 /// A virtual machine which is able to load and execute programs built for this architecture.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VirtualMachine {
     registers: [u16; 8],
     memory: [u16; 32768],
     stack: Vec<u16>,
 
     ip: usize, // instruction pointer
+
+    stdin: BufReader<Stdin>,
 }
 
 impl Default for VirtualMachine {
@@ -20,6 +24,7 @@ impl Default for VirtualMachine {
             stack: Default::default(),
 
             ip: 0,
+            stdin: BufReader::new(io::stdin()),
         }
     }
 }
@@ -119,6 +124,18 @@ impl VirtualMachine {
             Instruction::Out(op) => {
                 print!("{}", char::from(self.value(op) as u8));
             }
+            Instruction::In(reg) => {
+                let mut c = [0];
+
+                self.stdin.read_exact(&mut c).unwrap();
+
+                // Merge CRLF into LF
+                if c[0] == b'\r' {
+                    self.stdin.read_exact(&mut c).unwrap();
+                }
+
+                self.registers[reg] = c[0] as u16;
+            }
             Instruction::Noop => (),
         };
 
@@ -193,6 +210,7 @@ impl VirtualMachine {
             17 => fetch_o!(self, Call),
             18 => Instruction::Ret,
             19 => fetch_o!(self, Out),
+            20 => fetch_r!(self, In),
             21 => Instruction::Noop,
             _ => todo!("unimplemented opcode: {}", opcode),
         }
@@ -272,6 +290,8 @@ pub enum Instruction {
     Ret,
     /// Writes the character represented by the ASCII code in the operand to stdout.
     Out(Operand),
+    /// Reads a character from the stdin and writes its ASCII code to the specified register.
+    In(usize),
     /// Does nothing.
     Noop,
 }
